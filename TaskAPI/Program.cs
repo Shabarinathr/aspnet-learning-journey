@@ -1,61 +1,54 @@
+using Microsoft.AspNetCore.Builder;
+
 var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container.
-builder.Services.AddOpenApi();
-
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+var taskList = new List<TaskItem>
 {
-    app.MapOpenApi();
-}
-
-app.UseHttpsRedirection();
-
-// Original weather endpoint
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
+    new TaskItem {Id = 1, Title = "Learn ASP.net Core", IsCompleted = false},
+    new TaskItem {Id = 2, Title = "Build Task API",IsCompleted = false},
+    new TaskItem {Id = 3, Title = "Pass campus Placement", IsCompleted = false},
 };
-
-app.MapGet("/weatherforecast", () =>
+//Get any one task
+app.MapGet("/tasks",()=> taskList);
+app.MapGet("/tasks/{id}",(int id)=>
 {
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+    var task = taskList.FirstOrDefault(t=> t.Id == id);
+    return task is not null? Results.Ok(task) : Results.NotFound();
+});
 
-// NEW: Your tasks endpoint
-app.MapGet("/tasks", () =>
+//create new task(POST)
+app.MapPost("/tasks", (TaskItem newTask)=>
 {
-    return new[]
-    {
-        new TaskItem { Id = 1, Title = "Learn ASP.NET Core", IsCompleted = false },
-        new TaskItem { Id = 2, Title = "Build Task API", IsCompleted = false },
-        new TaskItem { Id = 3, Title = "Deploy to GitHub", IsCompleted = false }
-    };
-})
-.WithName("GetTasks");
+    newTask.Id = taskList.Any() ? taskList.Max(t=> t.Id) +1 : 1;
+    taskList.Add(newTask);
+    return Results.Created($"/tasks/{newTask.Id}", newTask);
+});
+
+//update the existing task
+app.MapPut("/tasks/{id}", (int id, TaskItem updatedTask)=>
+{
+    var task = taskList.FirstOrDefault(t => t.Id == id);
+    if(task is null) return Results.NotFound();
+
+    task.Title = updatedTask.Title;
+    task.IsCompleted = updatedTask.IsCompleted;
+    return Results.Ok(task);
+});
+
+app.MapDelete("/tasks/{id}", (int id) =>
+{
+    var task = taskList.FirstOrDefault(t => t.Id == id);
+    if (task is null) return Results.NotFound();
+    
+    taskList.Remove(task);
+    return Results.NoContent();
+});
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
-
-// NEW: Task model
 class TaskItem
 {
-    public int Id { get; set; }
-    public string Title { get; set; } = "";
-    public bool IsCompleted { get; set; }
+    public int Id{get; set;}
+    public string Title{get; set;}="";
+    public bool IsCompleted{get; set;}
 }
