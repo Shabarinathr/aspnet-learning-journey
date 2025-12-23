@@ -1,54 +1,56 @@
-using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
+using TaskAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Register database service
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite("Data Source=tasks.db"));
+
 var app = builder.Build();
 
-var taskList = new List<TaskItem>
+// GET ALL TASKS (from database)
+app.MapGet("/tasks", async (AppDbContext db) =>
 {
-    new TaskItem {Id = 1, Title = "Learn ASP.net Core", IsCompleted = false},
-    new TaskItem {Id = 2, Title = "Build Task API",IsCompleted = false},
-    new TaskItem {Id = 3, Title = "Pass campus Placement", IsCompleted = false},
-};
-//Get any one task
-app.MapGet("/tasks",()=> taskList);
-app.MapGet("/tasks/{id}",(int id)=>
-{
-    var task = taskList.FirstOrDefault(t=> t.Id == id);
-    return task is not null? Results.Ok(task) : Results.NotFound();
+    return await db.Tasks.ToListAsync();
 });
 
-//create new task(POST)
-app.MapPost("/tasks", (TaskItem newTask)=>
+// GET ONE TASK BY ID
+app.MapGet("/tasks/{id}", async (int id, AppDbContext db) =>
 {
-    newTask.Id = taskList.Any() ? taskList.Max(t=> t.Id) +1 : 1;
-    taskList.Add(newTask);
+    var task = await db.Tasks.FindAsync(id);
+    return task is not null ? Results.Ok(task) : Results.NotFound();
+});
+
+// CREATE NEW TASK
+app.MapPost("/tasks", async (TaskItem newTask, AppDbContext db) =>
+{
+    db.Tasks.Add(newTask);
+    await db.SaveChangesAsync();
     return Results.Created($"/tasks/{newTask.Id}", newTask);
 });
 
-//update the existing task
-app.MapPut("/tasks/{id}", (int id, TaskItem updatedTask)=>
+// UPDATE TASK
+app.MapPut("/tasks/{id}", async (int id, TaskItem updatedTask, AppDbContext db) =>
 {
-    var task = taskList.FirstOrDefault(t => t.Id == id);
-    if(task is null) return Results.NotFound();
-
+    var task = await db.Tasks.FindAsync(id);
+    if (task is null) return Results.NotFound();
+    
     task.Title = updatedTask.Title;
     task.IsCompleted = updatedTask.IsCompleted;
+    await db.SaveChangesAsync();
     return Results.Ok(task);
 });
 
-app.MapDelete("/tasks/{id}", (int id) =>
+// DELETE TASK
+app.MapDelete("/tasks/{id}", async (int id, AppDbContext db) =>
 {
-    var task = taskList.FirstOrDefault(t => t.Id == id);
+    var task = await db.Tasks.FindAsync(id);
     if (task is null) return Results.NotFound();
     
-    taskList.Remove(task);
+    db.Tasks.Remove(task);
+    await db.SaveChangesAsync();
     return Results.NoContent();
 });
 
 app.Run();
-class TaskItem
-{
-    public int Id{get; set;}
-    public string Title{get; set;}="";
-    public bool IsCompleted{get; set;}
-}
