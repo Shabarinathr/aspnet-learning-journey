@@ -3,54 +3,26 @@ using TaskAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register database service
+// 1. Database
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite("Data Source=tasks.db"));
 
+// 2. Controllers
+builder.Services.AddControllers();
+
+// 3. Swagger (SIMPLE version - no Models error)
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 var app = builder.Build();
 
-// GET ALL TASKS (from database)
-app.MapGet("/tasks", async (AppDbContext db) =>
+// 4. Swagger middleware
+if (app.Environment.IsDevelopment())
 {
-    return await db.Tasks.ToListAsync();
-});
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
-// GET ONE TASK BY ID
-app.MapGet("/tasks/{id}", async (int id, AppDbContext db) =>
-{
-    var task = await db.Tasks.FindAsync(id);
-    return task is not null ? Results.Ok(task) : Results.NotFound();
-});
-
-// CREATE NEW TASK
-app.MapPost("/tasks", async (TaskItem newTask, AppDbContext db) =>
-{
-    db.Tasks.Add(newTask);
-    await db.SaveChangesAsync();
-    return Results.Created($"/tasks/{newTask.Id}", newTask);
-});
-
-// UPDATE TASK
-app.MapPut("/tasks/{id}", async (int id, TaskItem updatedTask, AppDbContext db) =>
-{
-    var task = await db.Tasks.FindAsync(id);
-    if (task is null) return Results.NotFound();
-    
-    task.Title = updatedTask.Title;
-    task.IsCompleted = updatedTask.IsCompleted;
-    await db.SaveChangesAsync();
-    return Results.Ok(task);
-});
-
-// DELETE TASK
-app.MapDelete("/tasks/{id}", async (int id, AppDbContext db) =>
-{
-    var task = await db.Tasks.FindAsync(id);
-    if (task is null) return Results.NotFound();
-    
-    db.Tasks.Remove(task);
-    await db.SaveChangesAsync();
-    return Results.NoContent();
-});
+app.MapControllers();
 
 app.Run();
